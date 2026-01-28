@@ -1,8 +1,8 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import plotly.express as px
-import plotly.graph_objects as go
+import matplotlib.pyplot as plt
+import seaborn as sns
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 from sklearn.linear_model import LogisticRegression
@@ -45,6 +45,9 @@ st.markdown("""
     }
     </style>
 """, unsafe_allow_html=True)
+
+# Configurar estilo de seaborn
+sns.set_style("whitegrid")
 
 # Función para cargar datos
 @st.cache_data
@@ -154,71 +157,84 @@ with tab1:
     col1, col2 = st.columns(2)
     
     with col1:
-        # Distribución de casos
-        outcome_dist = data['Outcome'].value_counts().reset_index()
-        outcome_dist.columns = ['Diagnóstico', 'Cantidad']
-        outcome_dist['Diagnóstico'] = outcome_dist['Diagnóstico'].map({0: 'Sin Diabetes', 1: 'Con Diabetes'})
+        st.markdown("#### Distribución de Casos")
+        fig, ax = plt.subplots(figsize=(8, 5))
+        outcome_counts = data['Outcome'].value_counts()
+        colors = ['#3B82F6', '#EF4444']
+        bars = ax.bar(['Sin Diabetes', 'Con Diabetes'], outcome_counts.values, color=colors, edgecolor='black', linewidth=1.5)
+        ax.set_ylabel('Cantidad', fontsize=12, fontweight='bold')
+        ax.set_title('Distribución de Casos', fontsize=14, fontweight='bold', pad=20)
         
-        fig_outcome = px.bar(
-            outcome_dist, 
-            x='Diagnóstico', 
-            y='Cantidad',
-            title='Distribución de Casos',
-            color='Diagnóstico',
-            color_discrete_map={'Sin Diabetes': '#3B82F6', 'Con Diabetes': '#EF4444'},
-            text='Cantidad'
-        )
-        fig_outcome.update_layout(showlegend=False, height=400)
-        fig_outcome.update_traces(textposition='outside')
-        st.plotly_chart(fig_outcome, use_container_width=True)
+        # Agregar valores sobre las barras
+        for bar in bars:
+            height = bar.get_height()
+            ax.text(bar.get_x() + bar.get_width()/2., height,
+                    f'{int(height)}',
+                    ha='center', va='bottom', fontsize=12, fontweight='bold')
+        
+        plt.tight_layout()
+        st.pyplot(fig)
+        plt.close()
     
     with col2:
-        # Distribución por edad
+        st.markdown("#### Distribución por Edad")
+        fig, ax = plt.subplots(figsize=(8, 5))
         age_bins = [20, 30, 40, 50, 60, 100]
         age_labels = ['20-30', '31-40', '41-50', '51-60', '61+']
         data['AgeGroup'] = pd.cut(data['Age'], bins=age_bins, labels=age_labels, right=False)
-        age_dist = data['AgeGroup'].value_counts().sort_index().reset_index()
-        age_dist.columns = ['Rango de Edad', 'Cantidad']
+        age_counts = data['AgeGroup'].value_counts().sort_index()
         
-        fig_age = px.bar(
-            age_dist, 
-            x='Rango de Edad', 
-            y='Cantidad',
-            title='Distribución por Edad',
-            color_discrete_sequence=['#8B5CF6'],
-            text='Cantidad'
-        )
-        fig_age.update_layout(height=400)
-        fig_age.update_traces(textposition='outside')
-        st.plotly_chart(fig_age, use_container_width=True)
+        bars = ax.bar(age_labels, age_counts.values, color='#8B5CF6', edgecolor='black', linewidth=1.5)
+        ax.set_xlabel('Rango de Edad', fontsize=12, fontweight='bold')
+        ax.set_ylabel('Cantidad', fontsize=12, fontweight='bold')
+        ax.set_title('Distribución por Edad', fontsize=14, fontweight='bold', pad=20)
+        
+        # Agregar valores sobre las barras
+        for bar in bars:
+            height = bar.get_height()
+            ax.text(bar.get_x() + bar.get_width()/2., height,
+                    f'{int(height)}',
+                    ha='center', va='bottom', fontsize=12, fontweight='bold')
+        
+        plt.tight_layout()
+        st.pyplot(fig)
+        plt.close()
     
     # Scatter plot
     st.markdown("### Relación Glucosa vs BMI")
-    fig_scatter = px.scatter(
-        data.sample(200), 
-        x='Glucose', 
-        y='BMI',
-        color='Outcome',
-        color_discrete_map={0: '#3B82F6', 1: '#EF4444'},
-        labels={'Outcome': 'Diagnóstico'},
-        title='Glucosa vs BMI (Coloreado por Diagnóstico)',
-        opacity=0.6
-    )
-    fig_scatter.update_layout(height=500)
-    st.plotly_chart(fig_scatter, use_container_width=True)
+    fig, ax = plt.subplots(figsize=(12, 6))
+    
+    sample_data = data.sample(min(200, len(data)))
+    diabetes_data = sample_data[sample_data['Outcome'] == 1]
+    no_diabetes_data = sample_data[sample_data['Outcome'] == 0]
+    
+    ax.scatter(no_diabetes_data['Glucose'], no_diabetes_data['BMI'], 
+               c='#3B82F6', label='Sin Diabetes', alpha=0.6, s=50, edgecolors='black', linewidth=0.5)
+    ax.scatter(diabetes_data['Glucose'], diabetes_data['BMI'], 
+               c='#EF4444', label='Con Diabetes', alpha=0.6, s=50, edgecolors='black', linewidth=0.5)
+    
+    ax.set_xlabel('Glucosa (mg/dL)', fontsize=12, fontweight='bold')
+    ax.set_ylabel('BMI', fontsize=12, fontweight='bold')
+    ax.set_title('Glucosa vs BMI (Coloreado por Diagnóstico)', fontsize=14, fontweight='bold', pad=20)
+    ax.legend(fontsize=11)
+    ax.grid(True, alpha=0.3)
+    
+    plt.tight_layout()
+    st.pyplot(fig)
+    plt.close()
     
     # Matriz de correlación
     st.markdown("### Matriz de Correlación")
+    fig, ax = plt.subplots(figsize=(12, 8))
     corr_matrix = data.corr()
-    fig_corr = px.imshow(
-        corr_matrix,
-        text_auto='.2f',
-        color_continuous_scale='RdBu_r',
-        aspect='auto',
-        title='Correlación entre Variables'
-    )
-    fig_corr.update_layout(height=600)
-    st.plotly_chart(fig_corr, use_container_width=True)
+    
+    sns.heatmap(corr_matrix, annot=True, fmt='.2f', cmap='RdBu_r', center=0,
+                square=True, linewidths=1, cbar_kws={"shrink": 0.8}, ax=ax)
+    ax.set_title('Correlación entre Variables', fontsize=14, fontweight='bold', pad=20)
+    
+    plt.tight_layout()
+    st.pyplot(fig)
+    plt.close()
 
 # TAB 2: Modelo y Métricas
 with tab2:
@@ -254,44 +270,43 @@ with tab2:
     with col1:
         # Matriz de confusión
         st.markdown("### Matriz de Confusión")
+        fig, ax = plt.subplots(figsize=(8, 6))
         cm = metrics['confusion_matrix']
         
-        fig_cm = go.Figure(data=go.Heatmap(
-            z=cm,
-            x=['Predicho: No', 'Predicho: Sí'],
-            y=['Real: No', 'Real: Sí'],
-            text=cm,
-            texttemplate='%{text}',
-            textfont={"size": 20},
-            colorscale='Blues',
-            showscale=False
-        ))
-        fig_cm.update_layout(
-            title='Matriz de Confusión',
-            height=400,
-            xaxis_title='Predicción',
-            yaxis_title='Valor Real'
-        )
-        st.plotly_chart(fig_cm, use_container_width=True)
+        sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', 
+                    xticklabels=['Predicho: No', 'Predicho: Sí'],
+                    yticklabels=['Real: No', 'Real: Sí'],
+                    cbar_kws={"shrink": 0.8}, ax=ax, linewidths=2, linecolor='black')
+        
+        ax.set_title('Matriz de Confusión', fontsize=14, fontweight='bold', pad=20)
+        ax.set_ylabel('Valor Real', fontsize=12, fontweight='bold')
+        ax.set_xlabel('Predicción', fontsize=12, fontweight='bold')
+        
+        plt.tight_layout()
+        st.pyplot(fig)
+        plt.close()
     
     with col2:
         # Importancia de características
         st.markdown("### Importancia de Características")
+        fig, ax = plt.subplots(figsize=(8, 6))
+        
         feature_importance = pd.DataFrame({
             'Feature': X_train.columns,
             'Importance': np.abs(model.coef_[0])
         }).sort_values('Importance', ascending=True)
         
-        fig_importance = px.barh(
-            feature_importance,
-            x='Importance',
-            y='Feature',
-            title='Importancia de Características',
-            color='Importance',
-            color_continuous_scale='Viridis'
-        )
-        fig_importance.update_layout(height=400, showlegend=False)
-        st.plotly_chart(fig_importance, use_container_width=True)
+        colors_grad = plt.cm.viridis(np.linspace(0, 1, len(feature_importance)))
+        bars = ax.barh(feature_importance['Feature'], feature_importance['Importance'], 
+                       color=colors_grad, edgecolor='black', linewidth=1)
+        
+        ax.set_xlabel('Importancia', fontsize=12, fontweight='bold')
+        ax.set_title('Importancia de Características', fontsize=14, fontweight='bold', pad=20)
+        ax.grid(axis='x', alpha=0.3)
+        
+        plt.tight_layout()
+        st.pyplot(fig)
+        plt.close()
     
     # Información del modelo
     st.markdown("### Información del Modelo")
