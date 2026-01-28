@@ -1,500 +1,67 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
-import seaborn as sns
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
-from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, confusion_matrix
-import requests
-from io import StringIO
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import accuracy_score, confusion_matrix
 
-# Configuración de la página
-st.set_page_config(
-    page_title="Análisis ML - Diabetes",
-    page_icon="🏥",
-    layout="wide"
-)
+# 1. Título del aplicativo
+st.title("Predicción de Diabetes con Machine Learning")
 
-# Estilos CSS personalizados
-st.markdown("""
-    <style>
-    .main {
-        background: linear-gradient(to bottom right, #EFF6FF, #E0E7FF);
-    }
-    .stTabs [data-baseweb="tab-list"] {
-        gap: 2px;
-    }
-    .stTabs [data-baseweb="tab"] {
-        height: 50px;
-        background-color: #F3F4F6;
-        border-radius: 8px 8px 0 0;
-        padding: 10px 20px;
-        font-weight: 600;
-    }
-    .stTabs [aria-selected="true"] {
-        background-color: #3B82F6;
-        color: white;
-    }
-    .metric-card {
-        background: white;
-        padding: 20px;
-        border-radius: 10px;
-        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-    }
-    </style>
-""", unsafe_allow_html=True)
+# 2. Cargar datos
+url = "https://raw.githubusercontent.com/LuisPerezTimana/Webinars/main/diabetes.csv"
+df = pd.read_csv(url)
 
-# Configurar estilo de seaborn
-sns.set_style("whitegrid")
+st.subheader("Vista previa de los datos")
+st.write(df.head())
 
-# Función para cargar datos
-@st.cache_data
-def load_data():
-    url = 'https://raw.githubusercontent.com/LuisPerezTimana/Webinars/main/diabetes.csv'
-    response = requests.get(url)
-    data = pd.read_csv(StringIO(response.text))
-    return data
+# 3. Selección de variables
+X = df.drop("Outcome", axis=1)
+y = df["Outcome"]
 
-# Función para entrenar el modelo
-@st.cache_resource
-def train_model(data):
-    # Separar características y target
-    X = data.drop('Outcome', axis=1)
-    y = data['Outcome']
-    
-    # Dividir en train y test
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.2, random_state=42, stratify=y
-    )
-    
-    # Normalizar datos
-    scaler = StandardScaler()
-    X_train_scaled = scaler.fit_transform(X_train)
-    X_test_scaled = scaler.transform(X_test)
-    
-    # Entrenar modelo de Regresión Logística
-    model = LogisticRegression(random_state=42, max_iter=1000)
-    model.fit(X_train_scaled, y_train)
-    
-    # Predicciones
-    y_pred = model.predict(X_test_scaled)
-    
-    # Calcular métricas
-    metrics = {
-        'accuracy': accuracy_score(y_test, y_pred),
-        'precision': precision_score(y_test, y_pred),
-        'recall': recall_score(y_test, y_pred),
-        'f1_score': f1_score(y_test, y_pred),
-        'confusion_matrix': confusion_matrix(y_test, y_pred)
-    }
-    
-    return model, scaler, metrics, X_train, X_test, y_train, y_test
+# 4. División en entrenamiento y prueba
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
-# Cargar datos
-data = load_data()
-model, scaler, metrics, X_train, X_test, y_train, y_test = train_model(data)
+# 5. Escalado
+scaler = StandardScaler()
+X_train = scaler.fit_transform(X_train)
+X_test = scaler.transform(X_test)
 
-# Título principal
-st.markdown("""
-    <div style='background: white; padding: 30px; border-radius: 15px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); margin-bottom: 20px;'>
-        <h1 style='color: #1F2937; margin: 0;'>🏥 Análisis de Machine Learning - Diabetes</h1>
-        <p style='color: #6B7280; margin: 10px 0 0 0;'>Dataset Pima Indians Diabetes - Modelo de Clasificación</p>
-    </div>
-""", unsafe_allow_html=True)
+# 6. Entrenar modelo
+rf = RandomForestClassifier(random_state=42)
+rf.fit(X_train, y_train)
 
-# Tabs principales
-tab1, tab2, tab3 = st.tabs(["📊 Análisis Exploratorio", "🤖 Modelo y Métricas", "🔮 Predicción"])
+# 7. Evaluación
+y_pred = rf.predict(X_test)
+acc = accuracy_score(y_test, y_pred)
 
-# TAB 1: Análisis Exploratorio
-with tab1:
-    st.markdown("### Análisis Exploratorio de Datos")
-    
-    # Estadísticas generales
-    col1, col2, col3, col4 = st.columns(4)
-    
-    total_cases = len(data)
-    diabetes_count = data[data['Outcome'] == 1].shape[0]
-    no_diabetes_count = data[data['Outcome'] == 0].shape[0]
-    avg_age = data['Age'].mean()
-    
-    with col1:
-        st.markdown(f"""
-            <div class='metric-card'>
-                <p style='color: #6B7280; font-size: 14px; margin: 0;'>Total de Casos</p>
-                <p style='color: #1F2937; font-size: 28px; font-weight: bold; margin: 5px 0 0 0;'>{total_cases}</p>
-            </div>
-        """, unsafe_allow_html=True)
-    
-    with col2:
-        st.markdown(f"""
-            <div class='metric-card'>
-                <p style='color: #6B7280; font-size: 14px; margin: 0;'>Con Diabetes</p>
-                <p style='color: #EF4444; font-size: 28px; font-weight: bold; margin: 5px 0 0 0;'>{diabetes_count}</p>
-            </div>
-        """, unsafe_allow_html=True)
-    
-    with col3:
-        st.markdown(f"""
-            <div class='metric-card'>
-                <p style='color: #6B7280; font-size: 14px; margin: 0;'>Sin Diabetes</p>
-                <p style='color: #3B82F6; font-size: 28px; font-weight: bold; margin: 5px 0 0 0;'>{no_diabetes_count}</p>
-            </div>
-        """, unsafe_allow_html=True)
-    
-    with col4:
-        st.markdown(f"""
-            <div class='metric-card'>
-                <p style='color: #6B7280; font-size: 14px; margin: 0;'>Edad Promedio</p>
-                <p style='color: #8B5CF6; font-size: 28px; font-weight: bold; margin: 5px 0 0 0;'>{avg_age:.1f}</p>
-            </div>
-        """, unsafe_allow_html=True)
-    
-    st.markdown("<br>", unsafe_allow_html=True)
-    
-    # Gráficos
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.markdown("#### Distribución de Casos")
-        fig, ax = plt.subplots(figsize=(8, 5))
-        outcome_counts = data['Outcome'].value_counts()
-        colors = ['#3B82F6', '#EF4444']
-        bars = ax.bar(['Sin Diabetes', 'Con Diabetes'], outcome_counts.values, color=colors, edgecolor='black', linewidth=1.5)
-        ax.set_ylabel('Cantidad', fontsize=12, fontweight='bold')
-        ax.set_title('Distribución de Casos', fontsize=14, fontweight='bold', pad=20)
-        
-        # Agregar valores sobre las barras
-        for bar in bars:
-            height = bar.get_height()
-            ax.text(bar.get_x() + bar.get_width()/2., height,
-                    f'{int(height)}',
-                    ha='center', va='bottom', fontsize=12, fontweight='bold')
-        
-        plt.tight_layout()
-        st.pyplot(fig)
-        plt.close()
-    
-    with col2:
-        st.markdown("#### Distribución por Edad")
-        fig, ax = plt.subplots(figsize=(8, 5))
-        age_bins = [20, 30, 40, 50, 60, 100]
-        age_labels = ['20-30', '31-40', '41-50', '51-60', '61+']
-        data['AgeGroup'] = pd.cut(data['Age'], bins=age_bins, labels=age_labels, right=False)
-        age_counts = data['AgeGroup'].value_counts().sort_index()
-        
-        bars = ax.bar(age_labels, age_counts.values, color='#8B5CF6', edgecolor='black', linewidth=1.5)
-        ax.set_xlabel('Rango de Edad', fontsize=12, fontweight='bold')
-        ax.set_ylabel('Cantidad', fontsize=12, fontweight='bold')
-        ax.set_title('Distribución por Edad', fontsize=14, fontweight='bold', pad=20)
-        
-        # Agregar valores sobre las barras
-        for bar in bars:
-            height = bar.get_height()
-            ax.text(bar.get_x() + bar.get_width()/2., height,
-                    f'{int(height)}',
-                    ha='center', va='bottom', fontsize=12, fontweight='bold')
-        
-        plt.tight_layout()
-        st.pyplot(fig)
-        plt.close()
-    
-    # Scatter plot
-    st.markdown("### Relación Glucosa vs BMI")
-    fig, ax = plt.subplots(figsize=(12, 6))
-    
-    sample_data = data.sample(min(200, len(data)))
-    diabetes_data = sample_data[sample_data['Outcome'] == 1]
-    no_diabetes_data = sample_data[sample_data['Outcome'] == 0]
-    
-    ax.scatter(no_diabetes_data['Glucose'], no_diabetes_data['BMI'], 
-               c='#3B82F6', label='Sin Diabetes', alpha=0.6, s=50, edgecolors='black', linewidth=0.5)
-    ax.scatter(diabetes_data['Glucose'], diabetes_data['BMI'], 
-               c='#EF4444', label='Con Diabetes', alpha=0.6, s=50, edgecolors='black', linewidth=0.5)
-    
-    ax.set_xlabel('Glucosa (mg/dL)', fontsize=12, fontweight='bold')
-    ax.set_ylabel('BMI', fontsize=12, fontweight='bold')
-    ax.set_title('Glucosa vs BMI (Coloreado por Diagnóstico)', fontsize=14, fontweight='bold', pad=20)
-    ax.legend(fontsize=11)
-    ax.grid(True, alpha=0.3)
-    
-    plt.tight_layout()
-    st.pyplot(fig)
-    plt.close()
-    
-    # Matriz de correlación
-    st.markdown("### Matriz de Correlación")
-    fig, ax = plt.subplots(figsize=(12, 8))
-    corr_matrix = data.corr()
-    
-    sns.heatmap(corr_matrix, annot=True, fmt='.2f', cmap='RdBu_r', center=0,
-                square=True, linewidths=1, cbar_kws={"shrink": 0.8}, ax=ax)
-    ax.set_title('Correlación entre Variables', fontsize=14, fontweight='bold', pad=20)
-    
-    plt.tight_layout()
-    st.pyplot(fig)
-    plt.close()
+st.subheader("Evaluación del modelo")
+st.write(f"Exactitud: {acc:.2f}")
+st.write("Matriz de confusión:")
+st.write(confusion_matrix(y_test, y_pred))
 
-# TAB 2: Modelo y Métricas
-with tab2:
-    st.markdown("### Métricas del Modelo")
-    
-    # Métricas principales
-    col1, col2, col3, col4 = st.columns(4)
-    
-    metrics_data = [
-        ('Accuracy', metrics['accuracy'], '🎯', '#3B82F6'),
-        ('Precision', metrics['precision'], '🧠', '#10B981'),
-        ('Recall', metrics['recall'], '📈', '#8B5CF6'),
-        ('F1-Score', metrics['f1_score'], '⚡', '#F59E0B')
-    ]
-    
-    for col, (name, value, icon, color) in zip([col1, col2, col3, col4], metrics_data):
-        with col:
-            percentage = value * 100
-            st.markdown(f"""
-                <div style='background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);'>
-                    <div style='display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;'>
-                        <p style='color: #6B7280; font-size: 14px; margin: 0;'>{name}</p>
-                        <span style='font-size: 20px;'>{icon}</span>
-                    </div>
-                    <p style='color: {color}; font-size: 32px; font-weight: bold; margin: 0;'>{percentage:.2f}%</p>
-                </div>
-            """, unsafe_allow_html=True)
-    
-    st.markdown("<br>", unsafe_allow_html=True)
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        # Matriz de confusión
-        st.markdown("### Matriz de Confusión")
-        fig, ax = plt.subplots(figsize=(8, 6))
-        cm = metrics['confusion_matrix']
-        
-        sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', 
-                    xticklabels=['Predicho: No', 'Predicho: Sí'],
-                    yticklabels=['Real: No', 'Real: Sí'],
-                    cbar_kws={"shrink": 0.8}, ax=ax, linewidths=2, linecolor='black')
-        
-        ax.set_title('Matriz de Confusión', fontsize=14, fontweight='bold', pad=20)
-        ax.set_ylabel('Valor Real', fontsize=12, fontweight='bold')
-        ax.set_xlabel('Predicción', fontsize=12, fontweight='bold')
-        
-        plt.tight_layout()
-        st.pyplot(fig)
-        plt.close()
-    
-    with col2:
-        # Importancia de características
-        st.markdown("### Importancia de Características")
-        fig, ax = plt.subplots(figsize=(8, 6))
-        
-        feature_importance = pd.DataFrame({
-            'Feature': X_train.columns,
-            'Importance': np.abs(model.coef_[0])
-        }).sort_values('Importance', ascending=True)
-        
-        colors_grad = plt.cm.viridis(np.linspace(0, 1, len(feature_importance)))
-        bars = ax.barh(feature_importance['Feature'], feature_importance['Importance'], 
-                       color=colors_grad, edgecolor='black', linewidth=1)
-        
-        ax.set_xlabel('Importancia', fontsize=12, fontweight='bold')
-        ax.set_title('Importancia de Características', fontsize=14, fontweight='bold', pad=20)
-        ax.grid(axis='x', alpha=0.3)
-        
-        plt.tight_layout()
-        st.pyplot(fig)
-        plt.close()
-    
-    # Información del modelo
-    st.markdown("### Información del Modelo")
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.markdown("""
-            <div style='background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); border-left: 4px solid #3B82F6;'>
-                <p style='color: #6B7280; font-size: 14px; margin: 0 0 5px 0;'>Tipo de Modelo</p>
-                <p style='color: #1F2937; font-size: 16px; font-weight: 600; margin: 0;'>Regresión Logística</p>
-            </div>
-        """, unsafe_allow_html=True)
-        
-        st.markdown("<br>", unsafe_allow_html=True)
-        
-        num_features = len(X_train.columns)
-        st.markdown(f"""
-            <div style='background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); border-left: 4px solid #8B5CF6;'>
-                <p style='color: #6B7280; font-size: 14px; margin: 0 0 5px 0;'>Características</p>
-                <p style='color: #1F2937; font-size: 16px; font-weight: 600; margin: 0;'>{num_features} variables predictoras</p>
-            </div>
-        """, unsafe_allow_html=True)
-    
-    with col2:
-        train_size = len(X_train)
-        test_size = len(X_test)
-        st.markdown(f"""
-            <div style='background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); border-left: 4px solid #10B981;'>
-                <p style='color: #6B7280; font-size: 14px; margin: 0 0 5px 0;'>División del Dataset</p>
-                <p style='color: #1F2937; font-size: 16px; font-weight: 600; margin: 0;'>80% Train ({train_size}), 20% Test ({test_size})</p>
-            </div>
-        """, unsafe_allow_html=True)
-        
-        st.markdown("<br>", unsafe_allow_html=True)
-        
-        st.markdown("""
-            <div style='background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); border-left: 4px solid #F59E0B;'>
-                <p style='color: #6B7280; font-size: 14px; margin: 0 0 5px 0;'>Normalización</p>
-                <p style='color: #1F2937; font-size: 16px; font-weight: 600; margin: 0;'>Standard Scaler (Z-Score)</p>
-            </div>
-        """, unsafe_allow_html=True)
+# 8. Predicción interactiva
+st.subheader("Haz tu propia predicción")
 
-# TAB 3: Predicción
-with tab3:
-    st.markdown("### 🔮 Realizar Predicción")
-    
-    st.markdown("""
-        <div style='background: #DBEAFE; padding: 15px; border-radius: 10px; border-left: 4px solid #3B82F6; margin-bottom: 20px;'>
-            <p style='color: #1E40AF; margin: 0; font-size: 14px;'>
-                <strong>Instrucciones:</strong> Ingrese los valores para cada característica y presione el botón para obtener una predicción.
-            </p>
-        </div>
-    """, unsafe_allow_html=True)
-    
-    # Formulario de entrada
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        pregnancies = st.number_input('Embarazos', min_value=0, max_value=20, value=3, step=1)
-        glucose = st.number_input('Glucosa (mg/dL)', min_value=0, max_value=300, value=120, step=1)
-        blood_pressure = st.number_input('Presión Arterial (mm Hg)', min_value=0, max_value=200, value=70, step=1)
-        skin_thickness = st.number_input('Grosor de Piel (mm)', min_value=0, max_value=100, value=20, step=1)
-    
-    with col2:
-        insulin = st.number_input('Insulina (μU/mL)', min_value=0, max_value=900, value=79, step=1)
-        bmi = st.number_input('BMI (Índice de Masa Corporal)', min_value=0.0, max_value=70.0, value=32.0, step=0.1)
-        dpf = st.number_input('Función de Pedigree de Diabetes', min_value=0.0, max_value=3.0, value=0.5, step=0.01)
-        age = st.number_input('Edad (años)', min_value=18, max_value=120, value=33, step=1)
-    
-    # Botón de predicción
-    if st.button('🎯 Predecir Diagnóstico', use_container_width=True):
-        # Preparar datos para predicción
-        input_data = pd.DataFrame({
-            'Pregnancies': [pregnancies],
-            'Glucose': [glucose],
-            'BloodPressure': [blood_pressure],
-            'SkinThickness': [skin_thickness],
-            'Insulin': [insulin],
-            'BMI': [bmi],
-            'DiabetesPedigreeFunction': [dpf],
-            'Age': [age]
-        })
-        
-        # Escalar datos
-        input_scaled = scaler.transform(input_data)
-        
-        # Realizar predicción
-        prediction = model.predict(input_scaled)[0]
-        probability = model.predict_proba(input_scaled)[0]
-        
-        prob_diabetes = probability[1] * 100
-        prob_no_diabetes = probability[0] * 100
-        
-        # Mostrar resultado
-        if prediction == 1:
-            st.markdown(f"""
-                <div style='background: linear-gradient(135deg, #EF4444 0%, #DC2626 100%); 
-                            padding: 30px; border-radius: 15px; color: white; margin-top: 20px;
-                            box-shadow: 0 10px 25px rgba(239, 68, 68, 0.3);'>
-                    <div style='display: flex; align-items: center; gap: 15px; margin-bottom: 15px;'>
-                        <span style='font-size: 48px;'>⚠️</span>
-                        <div>
-                            <h2 style='margin: 0; font-size: 28px;'>Alto Riesgo de Diabetes</h2>
-                            <p style='margin: 5px 0 0 0; font-size: 16px; opacity: 0.9;'>
-                                Probabilidad: {prob_diabetes:.1f}%
-                            </p>
-                        </div>
-                    </div>
-                    <div style='background: rgba(255,255,255,0.2); padding: 15px; border-radius: 10px;'>
-                        <p style='margin: 0; font-size: 14px;'>
-                            Se recomienda consultar con un profesional médico para evaluación y diagnóstico definitivo.
-                        </p>
-                    </div>
-                </div>
-            """, unsafe_allow_html=True)
-        else:
-            st.markdown(f"""
-                <div style='background: linear-gradient(135deg, #10B981 0%, #059669 100%); 
-                            padding: 30px; border-radius: 15px; color: white; margin-top: 20px;
-                            box-shadow: 0 10px 25px rgba(16, 185, 129, 0.3);'>
-                    <div style='display: flex; align-items: center; gap: 15px; margin-bottom: 15px;'>
-                        <span style='font-size: 48px;'>✅</span>
-                        <div>
-                            <h2 style='margin: 0; font-size: 28px;'>Bajo Riesgo de Diabetes</h2>
-                            <p style='margin: 5px 0 0 0; font-size: 16px; opacity: 0.9;'>
-                                Probabilidad de no diabetes: {prob_no_diabetes:.1f}%
-                            </p>
-                        </div>
-                    </div>
-                    <div style='background: rgba(255,255,255,0.2); padding: 15px; border-radius: 10px;'>
-                        <p style='margin: 0; font-size: 14px;'>
-                            Continúe con hábitos saludables y chequeos médicos regulares.
-                        </p>
-                    </div>
-                </div>
-            """, unsafe_allow_html=True)
-        
-        # Mostrar probabilidades
-        st.markdown("<br>", unsafe_allow_html=True)
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.markdown(f"""
-                <div style='background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);'>
-                    <p style='color: #6B7280; font-size: 14px; margin: 0 0 10px 0;'>Probabilidad Sin Diabetes</p>
-                    <div style='background: #E0E7FF; height: 30px; border-radius: 15px; overflow: hidden;'>
-                        <div style='background: #3B82F6; height: 100%; width: {prob_no_diabetes}%; 
-                                    display: flex; align-items: center; justify-content: center;'>
-                            <span style='color: white; font-weight: bold; font-size: 12px;'>{prob_no_diabetes:.1f}%</span>
-                        </div>
-                    </div>
-                </div>
-            """, unsafe_allow_html=True)
-        
-        with col2:
-            st.markdown(f"""
-                <div style='background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);'>
-                    <p style='color: #6B7280; font-size: 14px; margin: 0 0 10px 0;'>Probabilidad Con Diabetes</p>
-                    <div style='background: #FEE2E2; height: 30px; border-radius: 15px; overflow: hidden;'>
-                        <div style='background: #EF4444; height: 100%; width: {prob_diabetes}%; 
-                                    display: flex; align-items: center; justify-content: center;'>
-                            <span style='color: white; font-weight: bold; font-size: 12px;'>{prob_diabetes:.1f}%</span>
-                        </div>
-                    </div>
-                </div>
-            """, unsafe_allow_html=True)
-    
-    # Nota importante
-    st.markdown("<br>", unsafe_allow_html=True)
-    st.markdown("""
-        <div style='background: #FEF3C7; padding: 20px; border-radius: 10px; border-left: 4px solid #F59E0B;'>
-            <h4 style='color: #92400E; margin: 0 0 10px 0;'>⚠️ Nota Importante</h4>
-            <p style='color: #78350F; margin: 0; font-size: 14px;'>
-                Este modelo es con fines <strong>educativos y demostrativos</strong>. Las predicciones no deben ser 
-                utilizadas como diagnóstico médico real. Siempre consulte con profesionales de la salud calificados 
-                para obtener un diagnóstico y tratamiento adecuado.
-            </p>
-        </div>
-    """, unsafe_allow_html=True)
+# Crear entradas para cada variable
+pregnancies = st.number_input("Número de embarazos", min_value=0, max_value=20, value=1)
+glucose = st.number_input("Glucosa", min_value=0, max_value=300, value=120)
+blood_pressure = st.number_input("Presión sanguínea", min_value=0, max_value=200, value=70)
+skin_thickness = st.number_input("Espesor de piel", min_value=0, max_value=100, value=20)
+insulin = st.number_input("Insulina", min_value=0, max_value=900, value=80)
+bmi = st.number_input("Índice de masa corporal (BMI)", min_value=0.0, max_value=70.0, value=25.0)
+dpf = st.number_input("Diabetes Pedigree Function", min_value=0.0, max_value=3.0, value=0.5)
+age = st.number_input("Edad", min_value=0, max_value=120, value=30)
 
-# Footer
-st.markdown("<br><br>", unsafe_allow_html=True)
-total_data = len(data)
-accuracy_pct = metrics['accuracy'] * 100
-st.markdown(f"""
-    <div style='text-align: center; color: #6B7280; padding: 20px;'>
-        <p style='margin: 0;'>🏥 Análisis de Machine Learning - Dataset Pima Indians Diabetes</p>
-        <p style='margin: 5px 0 0 0; font-size: 12px;'>Modelo entrenado con {total_data} registros | Accuracy: {accuracy_pct:.2f}%</p>
-    </div>
-""", unsafe_allow_html=True)
+# Botón de predicción
+if st.button("Predecir"):
+    input_data = np.array([[pregnancies, glucose, blood_pressure, skin_thickness,
+                            insulin, bmi, dpf, age]])
+    input_data = scaler.transform(input_data)
+    prediction = rf.predict(input_data)[0]
+
+    if prediction == 1:
+        st.error("El modelo predice: **Diabético**")
+    else:
+        st.success("El modelo predice: **No diabético**")
