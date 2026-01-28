@@ -1,7 +1,16 @@
-import React, { useState, useEffect } from 'react';
+
 import { BarChart, Bar, LineChart, Line, ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell } from 'recharts';
 import { Activity, Brain, TrendingUp, Target, AlertCircle } from 'lucide-react';
+import streamlit as st
 
+# Ejemplo de "estado" en Streamlit
+if "counter" not in st.session_state:
+    st.session_state.counter = 0
+
+if st.button("Incrementar"):
+    st.session_state.counter += 1
+
+st.write("Contador:", st.session_state.counter)
 const DiabetesMLApp = () => {
   const [data, setData] = useState([]);
   const [model, setModel] = useState(null);
