@@ -1,448 +1,485 @@
-
-import { BarChart, Bar, LineChart, Line, ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell } from 'recharts';
-import { Activity, Brain, TrendingUp, Target, AlertCircle } from 'lucide-react';
 import streamlit as st
+import pandas as pd
+import numpy as np
+import plotly.express as px
+import plotly.graph_objects as go
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, confusion_matrix
+import requests
+from io import StringIO
 
-# Ejemplo de "estado" en Streamlit
-if "counter" not in st.session_state:
-    st.session_state.counter = 0
+# Configuración de la página
+st.set_page_config(
+    page_title="Análisis ML - Diabetes",
+    page_icon="🏥",
+    layout="wide"
+)
 
-if st.button("Incrementar"):
-    st.session_state.counter += 1
-
-st.write("Contador:", st.session_state.counter)
-const DiabetesMLApp = () => {
-  const [data, setData] = useState([]);
-  const [model, setModel] = useState(null);
-  const [predictions, setPredictions] = useState([]);
-  const [metrics, setMetrics] = useState(null);
-  const [activeTab, setActiveTab] = useState('eda');
-  const [inputValues, setInputValues] = useState({
-    Pregnancies: 3,
-    Glucose: 120,
-    BloodPressure: 70,
-    SkinThickness: 20,
-    Insulin: 79,
-    BMI: 32,
-    DiabetesPedigreeFunction: 0.5,
-    Age: 33
-  });
-  const [predictionResult, setPredictionResult] = useState(null);
-
-  useEffect(() => {
-    loadAndProcessData();
-  }, []);
-
-  const loadAndProcessData = async () => {
-    try {
-      const response = await fetch('https://raw.githubusercontent.com/LuisPerezTimana/Webinars/main/diabetes.csv');
-      const csvText = await response.text();
-      
-      const lines = csvText.trim().split('\n');
-      const headers = lines[0].split(',');
-      
-      const parsedData = lines.slice(1).map(line => {
-        const values = line.split(',');
-        const obj = {};
-        headers.forEach((header, i) => {
-          obj[header] = parseFloat(values[i]);
-        });
-        return obj;
-      });
-      
-      setData(parsedData);
-      trainModel(parsedData);
-    } catch (error) {
-      console.error('Error loading data:', error);
+# Estilos CSS personalizados
+st.markdown("""
+    <style>
+    .main {
+        background: linear-gradient(to bottom right, #EFF6FF, #E0E7FF);
     }
-  };
-
-  const normalize = (value, min, max) => {
-    return (value - min) / (max - min);
-  };
-
-  const trainModel = (dataset) => {
-    const trainSize = Math.floor(dataset.length * 0.8);
-    const trainData = dataset.slice(0, trainSize);
-    const testData = dataset.slice(trainSize);
-
-    const features = ['Pregnancies', 'Glucose', 'BloodPressure', 'SkinThickness', 'Insulin', 'BMI', 'DiabetesPedigreeFunction', 'Age'];
-    
-    const stats = {};
-    features.forEach(feature => {
-      const values = trainData.map(d => d[feature]);
-      stats[feature] = {
-        min: Math.min(...values),
-        max: Math.max(...values),
-        mean: values.reduce((a, b) => a + b, 0) / values.length
-      };
-    });
-
-    const diabetesCount = trainData.filter(d => d.Outcome === 1).length;
-    const nonDiabetesCount = trainData.length - diabetesCount;
-    const weights = {};
-    
-    features.forEach(feature => {
-      const diabetesValues = trainData.filter(d => d.Outcome === 1).map(d => d[feature]);
-      const nonDiabetesValues = trainData.filter(d => d.Outcome === 0).map(d => d[feature]);
-      
-      const diabetesMean = diabetesValues.reduce((a, b) => a + b, 0) / diabetesValues.length;
-      const nonDiabetesMean = nonDiabetesValues.reduce((a, b) => a + b, 0) / nonDiabetesValues.length;
-      
-      weights[feature] = diabetesMean - nonDiabetesMean;
-    });
-
-    const predict = (input) => {
-      let score = 0;
-      features.forEach(feature => {
-        const normalized = normalize(input[feature], stats[feature].min, stats[feature].max);
-        score += normalized * weights[feature];
-      });
-      
-      const threshold = 0;
-      return score > threshold ? 1 : 0;
-    };
-
-    const testPredictions = testData.map(d => ({
-      actual: d.Outcome,
-      predicted: predict(d)
-    }));
-
-    const accuracy = testPredictions.filter(p => p.actual === p.predicted).length / testPredictions.length;
-    const truePositives = testPredictions.filter(p => p.actual === 1 && p.predicted === 1).length;
-    const falsePositives = testPredictions.filter(p => p.actual === 0 && p.predicted === 1).length;
-    const falseNegatives = testPredictions.filter(p => p.actual === 1 && p.predicted === 0).length;
-    
-    const precision = truePositives / (truePositives + falsePositives) || 0;
-    const recall = truePositives / (truePositives + falseNegatives) || 0;
-    const f1Score = 2 * (precision * recall) / (precision + recall) || 0;
-
-    setModel({ predict, stats, weights });
-    setPredictions(testPredictions);
-    setMetrics({
-      accuracy: (accuracy * 100).toFixed(2),
-      precision: (precision * 100).toFixed(2),
-      recall: (recall * 100).toFixed(2),
-      f1Score: (f1Score * 100).toFixed(2),
-      trainSize,
-      testSize: testData.length
-    });
-  };
-
-  const handlePredict = () => {
-    if (model) {
-      const result = model.predict(inputValues);
-      setPredictionResult(result);
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 2px;
     }
-  };
+    .stTabs [data-baseweb="tab"] {
+        height: 50px;
+        background-color: #F3F4F6;
+        border-radius: 8px 8px 0 0;
+        padding: 10px 20px;
+        font-weight: 600;
+    }
+    .stTabs [aria-selected="true"] {
+        background-color: #3B82F6;
+        color: white;
+    }
+    .metric-card {
+        background: white;
+        padding: 20px;
+        border-radius: 10px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+    </style>
+""", unsafe_allow_html=True)
 
-  const getFeatureImportance = () => {
-    if (!model) return [];
+# Función para cargar datos
+@st.cache_data
+def load_data():
+    url = 'https://raw.githubusercontent.com/LuisPerezTimana/Webinars/main/diabetes.csv'
+    response = requests.get(url)
+    data = pd.read_csv(StringIO(response.text))
+    return data
+
+# Función para entrenar el modelo
+@st.cache_resource
+def train_model(data):
+    # Separar características y target
+    X = data.drop('Outcome', axis=1)
+    y = data['Outcome']
     
-    const features = Object.keys(model.weights);
-    return features.map(feature => ({
-      name: feature,
-      importance: Math.abs(model.weights[feature])
-    })).sort((a, b) => b.importance - a.importance);
-  };
-
-  const getCorrelationData = () => {
-    if (data.length === 0) return [];
+    # Dividir en train y test
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=0.2, random_state=42, stratify=y
+    )
     
-    const features = ['Glucose', 'BMI', 'Age', 'Pregnancies'];
-    return data.slice(0, 100).map(d => ({
-      Glucose: d.Glucose,
-      BMI: d.BMI,
-      Age: d.Age,
-      Pregnancies: d.Pregnancies,
-      Outcome: d.Outcome
-    }));
-  };
-
-  const getOutcomeDistribution = () => {
-    if (data.length === 0) return [];
+    # Normalizar datos
+    scaler = StandardScaler()
+    X_train_scaled = scaler.fit_transform(X_train)
+    X_test_scaled = scaler.transform(X_test)
     
-    const diabetesCount = data.filter(d => d.Outcome === 1).length;
-    const nonDiabetesCount = data.length - diabetesCount;
+    # Entrenar modelo de Regresión Logística
+    model = LogisticRegression(random_state=42, max_iter=1000)
+    model.fit(X_train_scaled, y_train)
     
-    return [
-      { name: 'Sin Diabetes', value: nonDiabetesCount, percentage: ((nonDiabetesCount / data.length) * 100).toFixed(1) },
-      { name: 'Con Diabetes', value: diabetesCount, percentage: ((diabetesCount / data.length) * 100).toFixed(1) }
-    ];
-  };
-
-  const getAgeDistribution = () => {
-    if (data.length === 0) return [];
+    # Predicciones
+    y_pred = model.predict(X_test_scaled)
     
-    const ranges = [
-      { range: '20-30', min: 20, max: 30 },
-      { range: '31-40', min: 31, max: 40 },
-      { range: '41-50', min: 41, max: 50 },
-      { range: '51-60', min: 51, max: 60 },
-      { range: '61+', min: 61, max: 100 }
-    ];
+    # Calcular métricas
+    metrics = {
+        'accuracy': accuracy_score(y_test, y_pred),
+        'precision': precision_score(y_test, y_pred),
+        'recall': recall_score(y_test, y_pred),
+        'f1_score': f1_score(y_test, y_pred),
+        'confusion_matrix': confusion_matrix(y_test, y_pred)
+    }
     
-    return ranges.map(r => ({
-      age: r.range,
-      count: data.filter(d => d.Age >= r.min && d.Age <= r.max).length
-    }));
-  };
+    return model, scaler, metrics, X_train, X_test, y_train, y_test
 
-  const COLORS = ['#3b82f6', '#ef4444'];
+# Cargar datos
+data = load_data()
+model, scaler, metrics, X_train, X_test, y_train, y_test = train_model(data)
 
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-6">
-      <div className="max-w-7xl mx-auto">
-        <div className="bg-white rounded-2xl shadow-xl p-8 mb-6">
-          <div className="flex items-center gap-3 mb-2">
-            <Activity className="text-blue-600" size={32} />
-            <h1 className="text-3xl font-bold text-gray-800">Análisis de Machine Learning - Diabetes</h1>
-          </div>
-          <p className="text-gray-600">Dataset Pima Indians Diabetes - Modelo de Clasificación</p>
-        </div>
-
-        <div className="bg-white rounded-xl shadow-lg mb-6">
-          <div className="flex border-b">
-            <button
-              onClick={() => setActiveTab('eda')}
-              className={`flex-1 px-6 py-4 font-semibold transition-colors ${
-                activeTab === 'eda' 
-                  ? 'bg-blue-600 text-white' 
-                  : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
-              }`}
-            >
-              Análisis Exploratorio
-            </button>
-            <button
-              onClick={() => setActiveTab('model')}
-              className={`flex-1 px-6 py-4 font-semibold transition-colors ${
-                activeTab === 'model' 
-                  ? 'bg-blue-600 text-white' 
-                  : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
-              }`}
-            >
-              Modelo y Métricas
-            </button>
-            <button
-              onClick={() => setActiveTab('predict')}
-              className={`flex-1 px-6 py-4 font-semibold transition-colors ${
-                activeTab === 'predict' 
-                  ? 'bg-blue-600 text-white' 
-                  : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
-              }`}
-            >
-              Predicción
-            </button>
-          </div>
-        </div>
-
-        {activeTab === 'eda' && (
-          <div className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="bg-white rounded-xl shadow-lg p-6">
-                <h2 className="text-xl font-bold mb-4 text-gray-800">Distribución de Casos</h2>
-                <ResponsiveContainer width="100%" height={300}>
-                  <BarChart data={getOutcomeDistribution()}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="name" />
-                    <YAxis />
-                    <Tooltip content={({ active, payload }) => {
-                      if (active && payload && payload.length) {
-                        return (
-                          <div className="bg-white p-3 border border-gray-300 rounded shadow-lg">
-                            <p className="font-semibold">{payload[0].payload.name}</p>
-                            <p className="text-sm">Casos: {payload[0].value}</p>
-                            <p className="text-sm">Porcentaje: {payload[0].payload.percentage}%</p>
-                          </div>
-                        );
-                      }
-                      return null;
-                    }} />
-                    <Bar dataKey="value" radius={[8, 8, 0, 0]}>
-                      {getOutcomeDistribution().map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={COLORS[index]} />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-
-              <div className="bg-white rounded-xl shadow-lg p-6">
-                <h2 className="text-xl font-bold mb-4 text-gray-800">Distribución por Edad</h2>
-                <ResponsiveContainer width="100%" height={300}>
-                  <BarChart data={getAgeDistribution()}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="age" />
-                    <YAxis />
-                    <Tooltip />
-                    <Bar dataKey="count" fill="#8b5cf6" radius={[8, 8, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-
-            <div className="bg-white rounded-xl shadow-lg p-6">
-              <h2 className="text-xl font-bold mb-4 text-gray-800">Relación Glucosa vs BMI (Coloreado por Diagnóstico)</h2>
-              <ResponsiveContainer width="100%" height={400}>
-                <ScatterChart>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="Glucose" name="Glucosa" />
-                  <YAxis dataKey="BMI" name="BMI" />
-                  <Tooltip cursor={{ strokeDasharray: '3 3' }} />
-                  <Legend />
-                  <Scatter name="Sin Diabetes" data={getCorrelationData().filter(d => d.Outcome === 0)} fill="#3b82f6" />
-                  <Scatter name="Con Diabetes" data={getCorrelationData().filter(d => d.Outcome === 1)} fill="#ef4444" />
-                </ScatterChart>
-              </ResponsiveContainer>
-            </div>
-
-            <div className="bg-gradient-to-r from-blue-500 to-indigo-600 rounded-xl shadow-lg p-6 text-white">
-              <h3 className="text-xl font-bold mb-3">Estadísticas del Dataset</h3>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div className="bg-white bg-opacity-20 rounded-lg p-4">
-                  <p className="text-sm opacity-90">Total de Casos</p>
-                  <p className="text-2xl font-bold">{data.length}</p>
-                </div>
-                <div className="bg-white bg-opacity-20 rounded-lg p-4">
-                  <p className="text-sm opacity-90">Con Diabetes</p>
-                  <p className="text-2xl font-bold">{data.filter(d => d.Outcome === 1).length}</p>
-                </div>
-                <div className="bg-white bg-opacity-20 rounded-lg p-4">
-                  <p className="text-sm opacity-90">Sin Diabetes</p>
-                  <p className="text-2xl font-bold">{data.filter(d => d.Outcome === 0).length}</p>
-                </div>
-                <div className="bg-white bg-opacity-20 rounded-lg p-4">
-                  <p className="text-sm opacity-90">Edad Promedio</p>
-                  <p className="text-2xl font-bold">{(data.reduce((sum, d) => sum + d.Age, 0) / data.length).toFixed(1)}</p>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {activeTab === 'model' && metrics && (
-          <div className="space-y-6">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-              {[
-                { label: 'Accuracy', value: metrics.accuracy, icon: Target, color: 'blue' },
-                { label: 'Precision', value: metrics.precision, icon: Brain, color: 'green' },
-                { label: 'Recall', value: metrics.recall, icon: TrendingUp, color: 'purple' },
-                { label: 'F1-Score', value: metrics.f1Score, icon: Activity, color: 'orange' }
-              ].map((metric, idx) => (
-                <div key={idx} className="bg-white rounded-xl shadow-lg p-6">
-                  <div className="flex items-center justify-between mb-2">
-                    <p className="text-gray-600 text-sm font-medium">{metric.label}</p>
-                    <metric.icon className={`text-${metric.color}-500`} size={20} />
-                  </div>
-                  <p className="text-3xl font-bold text-gray-800">{metric.value}%</p>
-                </div>
-              ))}
-            </div>
-
-            <div className="bg-white rounded-xl shadow-lg p-6">
-              <h2 className="text-xl font-bold mb-4 text-gray-800">Importancia de Características</h2>
-              <ResponsiveContainer width="100%" height={400}>
-                <BarChart data={getFeatureImportance()} layout="vertical">
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis type="number" />
-                  <YAxis dataKey="name" type="category" width={180} />
-                  <Tooltip />
-                  <Bar dataKey="importance" fill="#6366f1" radius={[0, 8, 8, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-
-            <div className="bg-white rounded-xl shadow-lg p-6">
-              <h2 className="text-xl font-bold mb-4 text-gray-800">Información del Modelo</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="border-l-4 border-blue-500 pl-4">
-                  <p className="text-sm text-gray-600 mb-1">Tipo de Modelo</p>
-                  <p className="font-semibold text-lg">Clasificación Binaria (Weighted Scoring)</p>
-                </div>
-                <div className="border-l-4 border-green-500 pl-4">
-                  <p className="text-sm text-gray-600 mb-1">División del Dataset</p>
-                  <p className="font-semibold text-lg">80% Entrenamiento ({metrics.trainSize}), 20% Prueba ({metrics.testSize})</p>
-                </div>
-                <div className="border-l-4 border-purple-500 pl-4">
-                  <p className="text-sm text-gray-600 mb-1">Características</p>
-                  <p className="font-semibold text-lg">8 variables predictoras</p>
-                </div>
-                <div className="border-l-4 border-orange-500 pl-4">
-                  <p className="text-sm text-gray-600 mb-1">Normalización</p>
-                  <p className="font-semibold text-lg">Min-Max Scaling</p>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {activeTab === 'predict' && (
-          <div className="space-y-6">
-            <div className="bg-white rounded-xl shadow-lg p-6">
-              <h2 className="text-xl font-bold mb-6 text-gray-800 flex items-center gap-2">
-                <Brain className="text-blue-600" />
-                Realizar Predicción
-              </h2>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                {Object.keys(inputValues).map((key) => (
-                  <div key={key}>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      {key.replace(/([A-Z])/g, ' $1').trim()}
-                    </label>
-                    <input
-                      type="number"
-                      value={inputValues[key]}
-                      onChange={(e) => setInputValues({...inputValues, [key]: parseFloat(e.target.value) || 0})}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      step="0.01"
-                    />
-                  </div>
-                ))}
-              </div>
-
-              <button
-                onClick={handlePredict}
-                className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white py-4 rounded-lg font-semibold hover:from-blue-700 hover:to-indigo-700 transition-all shadow-lg"
-              >
-                Predecir Diagnóstico
-              </button>
-            </div>
-
-            {predictionResult !== null && (
-              <div className={`rounded-xl shadow-lg p-8 ${predictionResult === 1 ? 'bg-gradient-to-r from-red-500 to-pink-600' : 'bg-gradient-to-r from-green-500 to-emerald-600'} text-white`}>
-                <div className="flex items-center gap-4 mb-4">
-                  <AlertCircle size={48} />
-                  <div>
-                    <h3 className="text-2xl font-bold">Resultado de la Predicción</h3>
-                    <p className="text-lg opacity-90">
-                      {predictionResult === 1 
-                        ? 'Alto riesgo de diabetes detectado' 
-                        : 'Bajo riesgo de diabetes'}
-                    </p>
-                  </div>
-                </div>
-                <div className="bg-white bg-opacity-20 rounded-lg p-4 mt-4">
-                  <p className="text-sm">
-                    Esta predicción se basa en un modelo de machine learning entrenado con {data.length} casos. 
-                    Siempre consulte con un profesional médico para un diagnóstico definitivo.
-                  </p>
-                </div>
-              </div>
-            )}
-
-            <div className="bg-blue-50 border-l-4 border-blue-500 p-6 rounded-lg">
-              <h3 className="font-bold text-blue-900 mb-2">Nota Importante</h3>
-              <p className="text-blue-800 text-sm">
-                Este modelo es con fines educativos y demostrativos. Las predicciones no deben ser utilizadas 
-                como diagnóstico médico real. Siempre consulte con profesionales de la salud calificados.
-              </p>
-            </div>
-          </div>
-        )}
-      </div>
+# Título principal
+st.markdown("""
+    <div style='background: white; padding: 30px; border-radius: 15px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); margin-bottom: 20px;'>
+        <h1 style='color: #1F2937; margin: 0;'>🏥 Análisis de Machine Learning - Diabetes</h1>
+        <p style='color: #6B7280; margin: 10px 0 0 0;'>Dataset Pima Indians Diabetes - Modelo de Clasificación</p>
     </div>
-  );
-};
+""", unsafe_allow_html=True)
 
-export default DiabetesMLApp;
+# Tabs principales
+tab1, tab2, tab3 = st.tabs(["📊 Análisis Exploratorio", "🤖 Modelo y Métricas", "🔮 Predicción"])
+
+# TAB 1: Análisis Exploratorio
+with tab1:
+    st.markdown("### Análisis Exploratorio de Datos")
+    
+    # Estadísticas generales
+    col1, col2, col3, col4 = st.columns(4)
+    
+    total_cases = len(data)
+    diabetes_count = data[data['Outcome'] == 1].shape[0]
+    no_diabetes_count = data[data['Outcome'] == 0].shape[0]
+    avg_age = data['Age'].mean()
+    
+    with col1:
+        st.markdown(f"""
+            <div class='metric-card'>
+                <p style='color: #6B7280; font-size: 14px; margin: 0;'>Total de Casos</p>
+                <p style='color: #1F2937; font-size: 28px; font-weight: bold; margin: 5px 0 0 0;'>{total_cases}</p>
+            </div>
+        """, unsafe_allow_html=True)
+    
+    with col2:
+        st.markdown(f"""
+            <div class='metric-card'>
+                <p style='color: #6B7280; font-size: 14px; margin: 0;'>Con Diabetes</p>
+                <p style='color: #EF4444; font-size: 28px; font-weight: bold; margin: 5px 0 0 0;'>{diabetes_count}</p>
+            </div>
+        """, unsafe_allow_html=True)
+    
+    with col3:
+        st.markdown(f"""
+            <div class='metric-card'>
+                <p style='color: #6B7280; font-size: 14px; margin: 0;'>Sin Diabetes</p>
+                <p style='color: #3B82F6; font-size: 28px; font-weight: bold; margin: 5px 0 0 0;'>{no_diabetes_count}</p>
+            </div>
+        """, unsafe_allow_html=True)
+    
+    with col4:
+        st.markdown(f"""
+            <div class='metric-card'>
+                <p style='color: #6B7280; font-size: 14px; margin: 0;'>Edad Promedio</p>
+                <p style='color: #8B5CF6; font-size: 28px; font-weight: bold; margin: 5px 0 0 0;'>{avg_age:.1f}</p>
+            </div>
+        """, unsafe_allow_html=True)
+    
+    st.markdown("<br>", unsafe_allow_html=True)
+    
+    # Gráficos
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        # Distribución de casos
+        outcome_dist = data['Outcome'].value_counts().reset_index()
+        outcome_dist.columns = ['Diagnóstico', 'Cantidad']
+        outcome_dist['Diagnóstico'] = outcome_dist['Diagnóstico'].map({0: 'Sin Diabetes', 1: 'Con Diabetes'})
+        
+        fig_outcome = px.bar(
+            outcome_dist, 
+            x='Diagnóstico', 
+            y='Cantidad',
+            title='Distribución de Casos',
+            color='Diagnóstico',
+            color_discrete_map={'Sin Diabetes': '#3B82F6', 'Con Diabetes': '#EF4444'},
+            text='Cantidad'
+        )
+        fig_outcome.update_layout(showlegend=False, height=400)
+        fig_outcome.update_traces(textposition='outside')
+        st.plotly_chart(fig_outcome, use_container_width=True)
+    
+    with col2:
+        # Distribución por edad
+        age_bins = [20, 30, 40, 50, 60, 100]
+        age_labels = ['20-30', '31-40', '41-50', '51-60', '61+']
+        data['AgeGroup'] = pd.cut(data['Age'], bins=age_bins, labels=age_labels, right=False)
+        age_dist = data['AgeGroup'].value_counts().sort_index().reset_index()
+        age_dist.columns = ['Rango de Edad', 'Cantidad']
+        
+        fig_age = px.bar(
+            age_dist, 
+            x='Rango de Edad', 
+            y='Cantidad',
+            title='Distribución por Edad',
+            color_discrete_sequence=['#8B5CF6'],
+            text='Cantidad'
+        )
+        fig_age.update_layout(height=400)
+        fig_age.update_traces(textposition='outside')
+        st.plotly_chart(fig_age, use_container_width=True)
+    
+    # Scatter plot
+    st.markdown("### Relación Glucosa vs BMI")
+    fig_scatter = px.scatter(
+        data.sample(200), 
+        x='Glucose', 
+        y='BMI',
+        color='Outcome',
+        color_discrete_map={0: '#3B82F6', 1: '#EF4444'},
+        labels={'Outcome': 'Diagnóstico'},
+        title='Glucosa vs BMI (Coloreado por Diagnóstico)',
+        opacity=0.6
+    )
+    fig_scatter.update_layout(height=500)
+    st.plotly_chart(fig_scatter, use_container_width=True)
+    
+    # Matriz de correlación
+    st.markdown("### Matriz de Correlación")
+    corr_matrix = data.corr()
+    fig_corr = px.imshow(
+        corr_matrix,
+        text_auto='.2f',
+        color_continuous_scale='RdBu_r',
+        aspect='auto',
+        title='Correlación entre Variables'
+    )
+    fig_corr.update_layout(height=600)
+    st.plotly_chart(fig_corr, use_container_width=True)
+
+# TAB 2: Modelo y Métricas
+with tab2:
+    st.markdown("### Métricas del Modelo")
+    
+    # Métricas principales
+    col1, col2, col3, col4 = st.columns(4)
+    
+    metrics_data = [
+        ('Accuracy', metrics['accuracy'], '🎯', '#3B82F6'),
+        ('Precision', metrics['precision'], '🧠', '#10B981'),
+        ('Recall', metrics['recall'], '📈', '#8B5CF6'),
+        ('F1-Score', metrics['f1_score'], '⚡', '#F59E0B')
+    ]
+    
+    for col, (name, value, icon, color) in zip([col1, col2, col3, col4], metrics_data):
+        with col:
+            percentage = value * 100
+            st.markdown(f"""
+                <div style='background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);'>
+                    <div style='display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;'>
+                        <p style='color: #6B7280; font-size: 14px; margin: 0;'>{name}</p>
+                        <span style='font-size: 20px;'>{icon}</span>
+                    </div>
+                    <p style='color: {color}; font-size: 32px; font-weight: bold; margin: 0;'>{percentage:.2f}%</p>
+                </div>
+            """, unsafe_allow_html=True)
+    
+    st.markdown("<br>", unsafe_allow_html=True)
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        # Matriz de confusión
+        st.markdown("### Matriz de Confusión")
+        cm = metrics['confusion_matrix']
+        
+        fig_cm = go.Figure(data=go.Heatmap(
+            z=cm,
+            x=['Predicho: No', 'Predicho: Sí'],
+            y=['Real: No', 'Real: Sí'],
+            text=cm,
+            texttemplate='%{text}',
+            textfont={"size": 20},
+            colorscale='Blues',
+            showscale=False
+        ))
+        fig_cm.update_layout(
+            title='Matriz de Confusión',
+            height=400,
+            xaxis_title='Predicción',
+            yaxis_title='Valor Real'
+        )
+        st.plotly_chart(fig_cm, use_container_width=True)
+    
+    with col2:
+        # Importancia de características
+        st.markdown("### Importancia de Características")
+        feature_importance = pd.DataFrame({
+            'Feature': X_train.columns,
+            'Importance': np.abs(model.coef_[0])
+        }).sort_values('Importance', ascending=True)
+        
+        fig_importance = px.barh(
+            feature_importance,
+            x='Importance',
+            y='Feature',
+            title='Importancia de Características',
+            color='Importance',
+            color_continuous_scale='Viridis'
+        )
+        fig_importance.update_layout(height=400, showlegend=False)
+        st.plotly_chart(fig_importance, use_container_width=True)
+    
+    # Información del modelo
+    st.markdown("### Información del Modelo")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.markdown("""
+            <div style='background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); border-left: 4px solid #3B82F6;'>
+                <p style='color: #6B7280; font-size: 14px; margin: 0 0 5px 0;'>Tipo de Modelo</p>
+                <p style='color: #1F2937; font-size: 16px; font-weight: 600; margin: 0;'>Regresión Logística</p>
+            </div>
+        """, unsafe_allow_html=True)
+        
+        st.markdown("<br>", unsafe_allow_html=True)
+        
+        num_features = len(X_train.columns)
+        st.markdown(f"""
+            <div style='background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); border-left: 4px solid #8B5CF6;'>
+                <p style='color: #6B7280; font-size: 14px; margin: 0 0 5px 0;'>Características</p>
+                <p style='color: #1F2937; font-size: 16px; font-weight: 600; margin: 0;'>{num_features} variables predictoras</p>
+            </div>
+        """, unsafe_allow_html=True)
+    
+    with col2:
+        train_size = len(X_train)
+        test_size = len(X_test)
+        st.markdown(f"""
+            <div style='background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); border-left: 4px solid #10B981;'>
+                <p style='color: #6B7280; font-size: 14px; margin: 0 0 5px 0;'>División del Dataset</p>
+                <p style='color: #1F2937; font-size: 16px; font-weight: 600; margin: 0;'>80% Train ({train_size}), 20% Test ({test_size})</p>
+            </div>
+        """, unsafe_allow_html=True)
+        
+        st.markdown("<br>", unsafe_allow_html=True)
+        
+        st.markdown("""
+            <div style='background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); border-left: 4px solid #F59E0B;'>
+                <p style='color: #6B7280; font-size: 14px; margin: 0 0 5px 0;'>Normalización</p>
+                <p style='color: #1F2937; font-size: 16px; font-weight: 600; margin: 0;'>Standard Scaler (Z-Score)</p>
+            </div>
+        """, unsafe_allow_html=True)
+
+# TAB 3: Predicción
+with tab3:
+    st.markdown("### 🔮 Realizar Predicción")
+    
+    st.markdown("""
+        <div style='background: #DBEAFE; padding: 15px; border-radius: 10px; border-left: 4px solid #3B82F6; margin-bottom: 20px;'>
+            <p style='color: #1E40AF; margin: 0; font-size: 14px;'>
+                <strong>Instrucciones:</strong> Ingrese los valores para cada característica y presione el botón para obtener una predicción.
+            </p>
+        </div>
+    """, unsafe_allow_html=True)
+    
+    # Formulario de entrada
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        pregnancies = st.number_input('Embarazos', min_value=0, max_value=20, value=3, step=1)
+        glucose = st.number_input('Glucosa (mg/dL)', min_value=0, max_value=300, value=120, step=1)
+        blood_pressure = st.number_input('Presión Arterial (mm Hg)', min_value=0, max_value=200, value=70, step=1)
+        skin_thickness = st.number_input('Grosor de Piel (mm)', min_value=0, max_value=100, value=20, step=1)
+    
+    with col2:
+        insulin = st.number_input('Insulina (μU/mL)', min_value=0, max_value=900, value=79, step=1)
+        bmi = st.number_input('BMI (Índice de Masa Corporal)', min_value=0.0, max_value=70.0, value=32.0, step=0.1)
+        dpf = st.number_input('Función de Pedigree de Diabetes', min_value=0.0, max_value=3.0, value=0.5, step=0.01)
+        age = st.number_input('Edad (años)', min_value=18, max_value=120, value=33, step=1)
+    
+    # Botón de predicción
+    if st.button('🎯 Predecir Diagnóstico', use_container_width=True):
+        # Preparar datos para predicción
+        input_data = pd.DataFrame({
+            'Pregnancies': [pregnancies],
+            'Glucose': [glucose],
+            'BloodPressure': [blood_pressure],
+            'SkinThickness': [skin_thickness],
+            'Insulin': [insulin],
+            'BMI': [bmi],
+            'DiabetesPedigreeFunction': [dpf],
+            'Age': [age]
+        })
+        
+        # Escalar datos
+        input_scaled = scaler.transform(input_data)
+        
+        # Realizar predicción
+        prediction = model.predict(input_scaled)[0]
+        probability = model.predict_proba(input_scaled)[0]
+        
+        prob_diabetes = probability[1] * 100
+        prob_no_diabetes = probability[0] * 100
+        
+        # Mostrar resultado
+        if prediction == 1:
+            st.markdown(f"""
+                <div style='background: linear-gradient(135deg, #EF4444 0%, #DC2626 100%); 
+                            padding: 30px; border-radius: 15px; color: white; margin-top: 20px;
+                            box-shadow: 0 10px 25px rgba(239, 68, 68, 0.3);'>
+                    <div style='display: flex; align-items: center; gap: 15px; margin-bottom: 15px;'>
+                        <span style='font-size: 48px;'>⚠️</span>
+                        <div>
+                            <h2 style='margin: 0; font-size: 28px;'>Alto Riesgo de Diabetes</h2>
+                            <p style='margin: 5px 0 0 0; font-size: 16px; opacity: 0.9;'>
+                                Probabilidad: {prob_diabetes:.1f}%
+                            </p>
+                        </div>
+                    </div>
+                    <div style='background: rgba(255,255,255,0.2); padding: 15px; border-radius: 10px;'>
+                        <p style='margin: 0; font-size: 14px;'>
+                            Se recomienda consultar con un profesional médico para evaluación y diagnóstico definitivo.
+                        </p>
+                    </div>
+                </div>
+            """, unsafe_allow_html=True)
+        else:
+            st.markdown(f"""
+                <div style='background: linear-gradient(135deg, #10B981 0%, #059669 100%); 
+                            padding: 30px; border-radius: 15px; color: white; margin-top: 20px;
+                            box-shadow: 0 10px 25px rgba(16, 185, 129, 0.3);'>
+                    <div style='display: flex; align-items: center; gap: 15px; margin-bottom: 15px;'>
+                        <span style='font-size: 48px;'>✅</span>
+                        <div>
+                            <h2 style='margin: 0; font-size: 28px;'>Bajo Riesgo de Diabetes</h2>
+                            <p style='margin: 5px 0 0 0; font-size: 16px; opacity: 0.9;'>
+                                Probabilidad de no diabetes: {prob_no_diabetes:.1f}%
+                            </p>
+                        </div>
+                    </div>
+                    <div style='background: rgba(255,255,255,0.2); padding: 15px; border-radius: 10px;'>
+                        <p style='margin: 0; font-size: 14px;'>
+                            Continúe con hábitos saludables y chequeos médicos regulares.
+                        </p>
+                    </div>
+                </div>
+            """, unsafe_allow_html=True)
+        
+        # Mostrar probabilidades
+        st.markdown("<br>", unsafe_allow_html=True)
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.markdown(f"""
+                <div style='background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);'>
+                    <p style='color: #6B7280; font-size: 14px; margin: 0 0 10px 0;'>Probabilidad Sin Diabetes</p>
+                    <div style='background: #E0E7FF; height: 30px; border-radius: 15px; overflow: hidden;'>
+                        <div style='background: #3B82F6; height: 100%; width: {prob_no_diabetes}%; 
+                                    display: flex; align-items: center; justify-content: center;'>
+                            <span style='color: white; font-weight: bold; font-size: 12px;'>{prob_no_diabetes:.1f}%</span>
+                        </div>
+                    </div>
+                </div>
+            """, unsafe_allow_html=True)
+        
+        with col2:
+            st.markdown(f"""
+                <div style='background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);'>
+                    <p style='color: #6B7280; font-size: 14px; margin: 0 0 10px 0;'>Probabilidad Con Diabetes</p>
+                    <div style='background: #FEE2E2; height: 30px; border-radius: 15px; overflow: hidden;'>
+                        <div style='background: #EF4444; height: 100%; width: {prob_diabetes}%; 
+                                    display: flex; align-items: center; justify-content: center;'>
+                            <span style='color: white; font-weight: bold; font-size: 12px;'>{prob_diabetes:.1f}%</span>
+                        </div>
+                    </div>
+                </div>
+            """, unsafe_allow_html=True)
+    
+    # Nota importante
+    st.markdown("<br>", unsafe_allow_html=True)
+    st.markdown("""
+        <div style='background: #FEF3C7; padding: 20px; border-radius: 10px; border-left: 4px solid #F59E0B;'>
+            <h4 style='color: #92400E; margin: 0 0 10px 0;'>⚠️ Nota Importante</h4>
+            <p style='color: #78350F; margin: 0; font-size: 14px;'>
+                Este modelo es con fines <strong>educativos y demostrativos</strong>. Las predicciones no deben ser 
+                utilizadas como diagnóstico médico real. Siempre consulte con profesionales de la salud calificados 
+                para obtener un diagnóstico y tratamiento adecuado.
+            </p>
+        </div>
+    """, unsafe_allow_html=True)
+
+# Footer
+st.markdown("<br><br>", unsafe_allow_html=True)
+total_data = len(data)
+accuracy_pct = metrics['accuracy'] * 100
+st.markdown(f"""
+    <div style='text-align: center; color: #6B7280; padding: 20px;'>
+        <p style='margin: 0;'>🏥 Análisis de Machine Learning - Dataset Pima Indians Diabetes</p>
+        <p style='margin: 5px 0 0 0; font-size: 12px;'>Modelo entrenado con {total_data} registros | Accuracy: {accuracy_pct:.2f}%</p>
+    </div>
+""", unsafe_allow_html=True)
